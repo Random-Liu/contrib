@@ -24,14 +24,17 @@ import (
 	"time"
 )
 
-var rates = []float64{0.5, 0.75, 0.95, 0.99}
+var percentiles = []float64{0.5, 0.75, 0.95, 0.99}
 
 var last = time.Now()
 
-func logTime(label string) {
+func log(content string) {
 	now := time.Now()
-	fmt.Printf("%02d:%02d:%02d:%02d\t%s\n", last.Day(), last.Hour(), last.Minute(), last.Second(), label)
-	fmt.Printf("%02d:%02d:%02d:%02d\t%s\n", now.Day(), now.Hour(), now.Minute(), now.Second(), label)
+	logWithTimestamp := func(t time.Time, c string) {
+		fmt.Printf("%02d:%02d:%02d:%02d\t%s\n", t.Day(), t.Hour(), t.Minute(), t.Second(), content)
+	}
+	logWithTimestamp(last, content)
+	logWithTimestamp(now, content)
 	last = now
 }
 
@@ -51,7 +54,12 @@ func LogEVar(vars map[string]interface{}) {
 
 // LogLabels prints the labels of the result table
 func LogLabels(labels ...string) {
-	fmt.Printf("time\t%%50\t%%75\t%%95\t%%99\t%s\n", strings.Join(labels, "\t"))
+	content := "time\t"
+	for _, percentile := range percentiles {
+		content += fmt.Sprintf("%%%02d\t", int(percentile*100))
+	}
+	content += strings.Join(labels, "\t")
+	fmt.Println(content)
 }
 
 // LogResult prints the item of the result table
@@ -69,11 +77,11 @@ func LogResult(latencies []int, variables ...string) {
 
 	sort.Ints(latencies)
 	var avgs [4]float64
-	for i, rate := range rates {
-		n := int(math.Ceil((1 - rate) * float64(len(latencies))))
+	for i, percentile := range percentiles {
+		n := int(math.Ceil((1 - percentile) * float64(len(latencies))))
 		avgs[i] = float64(average(latencies[len(latencies)-n:])) / 1000000
 	}
-	logTime(fmt.Sprintf("%.2f\t%.2f\t%.2f\t%.2f\t%s", avgs[0], avgs[1], avgs[2], avgs[3], strings.Join(variables, "\t")))
+	log(fmt.Sprintf("%.2f\t%.2f\t%.2f\t%.2f\t%s", avgs[0], avgs[1], avgs[2], avgs[3], strings.Join(variables, "\t")))
 }
 
 // Itoas converts int numbers to a slice of string

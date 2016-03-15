@@ -27,10 +27,6 @@ import (
 	"github.com/juju/ratelimit"
 )
 
-var (
-	wg = &sync.WaitGroup{}
-)
-
 func newContainerName() string {
 	return "benchmark_container_" + strconv.FormatInt(time.Now().UnixNano(), 10) + strconv.Itoa(rand.Int())
 }
@@ -98,25 +94,17 @@ func CreateAliveContainers(client *docker.Client, num int) []string {
 	return ids
 }
 
-// DoListContainerBenchmark does periodically ListContainers with specific interval, returns latencies of all the calls
-func DoListContainerBenchmark(client *docker.Client, interval, testPeriod time.Duration, all bool, stopchan chan int) []int {
+// DoListContainerBenchmark does periodically ListContainers with specific interval, returns latencies of
+// all the calls in nanoseconds
+func DoListContainerBenchmark(client *docker.Client, interval, testPeriod time.Duration, listAll bool) []int {
 	startTime := time.Now()
 	latencies := []int{}
 	for {
 		start := time.Now()
-		client.ListContainers(docker.ListContainersOptions{All: all})
-		end := time.Now()
-		latencies = append(latencies, int(end.Sub(start).Nanoseconds()))
-		if stopchan == nil {
-			if time.Now().Sub(startTime) >= testPeriod {
-				return latencies
-			}
-		} else {
-			select {
-			case <-stopchan:
-				return latencies
-			default:
-			}
+		client.ListContainers(docker.ListContainersOptions{All: listAll})
+		latencies = append(latencies, int(time.Since(start).Nanoseconds()))
+		if time.Now().Sub(startTime) >= testPeriod {
+			return latencies
 		}
 		if interval != 0 {
 			time.Sleep(interval)
@@ -125,7 +113,8 @@ func DoListContainerBenchmark(client *docker.Client, interval, testPeriod time.D
 	return latencies
 }
 
-// DoInspectContainerBenchmark does periodically InspectContainer with specific interval, returns latencies of all the calls
+// DoInspectContainerBenchmark does periodically InspectContainer with specific interval, returns latencies
+// of all the calls in nanoseconds
 func DoInspectContainerBenchmark(client *docker.Client, interval, testPeriod time.Duration, containerIds []string) []int {
 	startTime := time.Now()
 	latencies := []int{}
@@ -134,8 +123,7 @@ func DoInspectContainerBenchmark(client *docker.Client, interval, testPeriod tim
 		containerId := containerIds[rand.Int()%len(containerIds)]
 		start := time.Now()
 		client.InspectContainer(containerId)
-		end := time.Now()
-		latencies = append(latencies, int(end.Sub(start).Nanoseconds()))
+		latencies = append(latencies, int(time.Since(start).Nanoseconds()))
 		if time.Now().Sub(startTime) >= testPeriod {
 			break
 		}
@@ -146,13 +134,15 @@ func DoInspectContainerBenchmark(client *docker.Client, interval, testPeriod tim
 	return latencies
 }
 
-// DoParalListContainerBenchmark starts routineNumber of goroutines and let them do DoListContainerBenchmark, returns latencies of all the calls
-func DoParalListContainerBenchmark(client *docker.Client, interval, testPeriod time.Duration, routineNumber int, all bool) []int {
+// DoParallelListContainerBenchmark starts routineNumber of goroutines and let them do DoListContainerBenchmark,
+// returns latencies of all the calls in nanoseconds
+func DoParallelListContainerBenchmark(client *docker.Client, interval, testPeriod time.Duration, routineNumber int, all bool) []int {
+	wg := &sync.WaitGroup{}
 	wg.Add(routineNumber)
 	latenciesTable := make([][]int, routineNumber)
 	for i := 0; i < routineNumber; i++ {
 		go func(index int) {
-			latenciesTable[index] = DoListContainerBenchmark(client, interval, testPeriod, all, nil)
+			latenciesTable[index] = DoListContainerBenchmark(client, interval, testPeriod, all)
 			wg.Done()
 		}(i)
 	}
@@ -164,8 +154,10 @@ func DoParalListContainerBenchmark(client *docker.Client, interval, testPeriod t
 	return allLatencies
 }
 
-// DoParalInspectContainerBenchmark starts routineNumber of goroutines and let them do DoInspectContainerBenchmark, returns latencies of all the calls
-func DoParalInspectContainerBenchmark(client *docker.Client, interval, testPeriod time.Duration, routineNumber int, containerIds []string) []int {
+// DoParallelInspectContainerBenchmark starts routineNumber of goroutines and let them do DoInspectContainerBenchmark,
+// returns latencies of all the calls in nanoseconds
+func DoParallelInspectContainerBenchmark(client *docker.Client, interval, testPeriod time.Duration, routineNumber int, containerIds []string) []int {
+	wg := &sync.WaitGroup{}
 	wg.Add(routineNumber)
 	latenciesTable := make([][]int, routineNumber)
 	for i := 0; i < routineNumber; i++ {
@@ -182,9 +174,10 @@ func DoParalInspectContainerBenchmark(client *docker.Client, interval, testPerio
 	return allLatencies
 }
 
-// DoParalContainerStartBenchmark starts routineNumber of goroutines and let them start containers, returns latencies of all the starting calls
-// There is a global rate limit on starting calls per second.
-func DoParalContainerStartBenchmark(client *docker.Client, qps float64, testPeriod time.Duration, routineNumber int) []int {
+// DoParallelContainerStartBenchmark starts routineNumber of goroutines and let them start containers, returns latencies
+// of all the starting calls in nanoseconds. There is a global rate limit on starting calls per second.
+func DoParallelContainerStartBenchmark(client *docker.Client, qps float64, testPeriod time.Duration, routineNumber int) []int {
+	wg := &sync.WaitGroup{}
 	wg.Add(routineNumber)
 	ratelimit := ratelimit.NewBucketWithRate(qps, int64(routineNumber))
 	latenciesTable := make([][]int, routineNumber)
@@ -197,8 +190,7 @@ func DoParalContainerStartBenchmark(client *docker.Client, qps float64, testPeri
 				start := time.Now()
 				ids := CreateContainers(client, 1)
 				StartContainers(client, ids)
-				end := time.Now()
-				latencies = append(latencies, int(end.Sub(start).Nanoseconds()))
+				latencies = append(latencies, int(time.Since(start).Nanoseconds()))
 				if time.Now().Sub(startTime) >= testPeriod {
 					break
 				}
@@ -215,9 +207,10 @@ func DoParalContainerStartBenchmark(client *docker.Client, qps float64, testPeri
 	return allLatencies
 }
 
-// DoParalContainerStopBenchmark starts routineNumber of goroutines and let them stop containers, returns latencies of all the stopping calls
-// There is a global rate limit on stopping calls per second.
-func DoParalContainerStopBenchmark(client *docker.Client, qps float64, routineNumber int) []int {
+// DoParallelContainerStopBenchmark starts routineNumber of goroutines and let them stop containers, returns latencies
+// of all the stopping calls in nanoseconds. There is a global rate limit on stopping calls per second.
+func DoParallelContainerStopBenchmark(client *docker.Client, qps float64, routineNumber int) []int {
+	wg := &sync.WaitGroup{}
 	ids := GetContainerIds(client)
 	idTable := make([][]string, routineNumber)
 	for i := 0; i < len(ids); i++ {
@@ -234,8 +227,7 @@ func DoParalContainerStopBenchmark(client *docker.Client, qps float64, routineNu
 				start := time.Now()
 				StopContainers(client, []string{id})
 				RemoveContainers(client, []string{id})
-				end := time.Now()
-				latencies = append(latencies, int(end.Sub(start).Nanoseconds()))
+				latencies = append(latencies, int(time.Since(start).Nanoseconds()))
 			}
 			latenciesTable[index] = latencies
 			wg.Done()

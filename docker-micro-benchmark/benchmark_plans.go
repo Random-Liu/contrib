@@ -40,12 +40,12 @@ func benchmarkContainerStart(client *docker.Client) {
 	helpers.LogLabels("qps", "cps")
 	for _, q := range cfg["qps"].([]float64) {
 		start := time.Now()
-		latencies := helpers.DoParalContainerStartBenchmark(client, q, period, routine)
+		latencies := helpers.DoParallelContainerStartBenchmark(client, q, period, routine)
 		cps := float64(len(latencies)) / time.Now().Sub(start).Seconds()
 		helpers.LogResult(latencies, helpers.Ftoas(q, cps)...)
 
 		start = time.Now()
-		latencies = helpers.DoParalContainerStopBenchmark(client, q, routine)
+		latencies = helpers.DoParallelContainerStopBenchmark(client, q, routine)
 		cps = float64(len(latencies)) / time.Now().Sub(start).Seconds()
 		helpers.LogResult(latencies, helpers.Ftoas(q, cps)...)
 	}
@@ -77,9 +77,9 @@ func benchmarkVariesContainerNumber(client *docker.Client) {
 			alive = num
 		}
 		total := dead + alive
-		latencies := helpers.DoListContainerBenchmark(client, interval, period, true, nil)
+		latencies := helpers.DoListContainerBenchmark(client, interval, period, true)
 		helpers.LogResult(latencies, helpers.Itoas(dead, alive, total)...)
-		latencies = helpers.DoListContainerBenchmark(client, interval, period, false, nil)
+		latencies = helpers.DoListContainerBenchmark(client, interval, period, false)
 		helpers.LogResult(latencies, helpers.Itoas(dead, alive, total)...)
 		latencies = helpers.DoInspectContainerBenchmark(client, interval, period, ids)
 		helpers.LogResult(latencies, helpers.Itoas(dead, alive, total)...)
@@ -102,7 +102,7 @@ func benchmarkVariesInterval(client *docker.Client) {
 	})
 	helpers.LogLabels("interval")
 	for _, curInterval := range listIntervals {
-		latencies := helpers.DoListContainerBenchmark(client, curInterval, listPeriod, true, nil)
+		latencies := helpers.DoListContainerBenchmark(client, curInterval, listPeriod, true)
 		helpers.LogResult(latencies, helpers.Itoas(int(curInterval/time.Millisecond))...)
 	}
 
@@ -115,7 +115,7 @@ func benchmarkVariesInterval(client *docker.Client) {
 	})
 	helpers.LogLabels("interval")
 	for _, curInterval := range listIntervals {
-		latencies := helpers.DoListContainerBenchmark(client, curInterval, listPeriod, false, nil)
+		latencies := helpers.DoListContainerBenchmark(client, curInterval, listPeriod, false)
 		helpers.LogResult(latencies, helpers.Itoas(int(curInterval/time.Millisecond))...)
 	}
 
@@ -153,7 +153,7 @@ func benchmarkVariesRoutineNumber(client *docker.Client) {
 	})
 	helpers.LogLabels("#routines")
 	for _, curRoutineNumber := range routines {
-		latencies := helpers.DoParalListContainerBenchmark(client, listInterval, period, curRoutineNumber, true)
+		latencies := helpers.DoParallelListContainerBenchmark(client, listInterval, period, curRoutineNumber, true)
 		helpers.LogResult(latencies, helpers.Itoas(curRoutineNumber)...)
 	}
 
@@ -167,7 +167,7 @@ func benchmarkVariesRoutineNumber(client *docker.Client) {
 	})
 	helpers.LogLabels("#routines")
 	for _, curRoutineNumber := range routines {
-		latencies := helpers.DoParalInspectContainerBenchmark(client, inspectInterval, period, curRoutineNumber, containerIds)
+		latencies := helpers.DoParallelInspectContainerBenchmark(client, inspectInterval, period, curRoutineNumber, containerIds)
 		helpers.LogResult(latencies, helpers.Itoas(curRoutineNumber)...)
 	}
 }

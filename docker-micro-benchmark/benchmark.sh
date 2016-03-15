@@ -88,7 +88,7 @@ while [ "$1" != "" ]; do
       CONTAINER_NUMBER=`docker ps -a | wc -l`
       CONTAINER_NUMBER=`expr $CONTAINER_NUMBER - 1`
       if [ $CONTAINER_NUMBER -ne 0 ]; then
-        shell/kill_all_dockers.sh > /dev/null
+        shell/remove_all_containers.sh > /dev/null
       fi 
       echo "Benchmark with different container numbers"
       doBenchmark $1 varies_containers
@@ -100,7 +100,7 @@ while [ "$1" != "" ]; do
       shift
       ;;
     -r )
-      echo "Benchmark with different routine numbers"
+      echo "Benchmark with different goroutine numbers"
       doBenchmark $1 varies_routines
       shift
       ;;
